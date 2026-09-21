@@ -19,6 +19,7 @@ tail-risk-mc/
 │   ├── config.py         # paths, RNG seed, risk levels, the "true" process
 │   ├── generate_data.py  # GARCH(1,1)-t data generator  -> data/returns.csv
 │   ├── calibrate.py      # MLE fits: Normal, Student-t, EVT/GPD -> results.json
+│   ├── conditional.py    # GARCH(1,1) QMLE + EVT on residuals -> daily VaR
 │   ├── simulate.py       # Monte Carlo VaR & ES (+ bootstrap std error)
 │   ├── backtest.py       # Kupiec (count) + Christoffersen (independence) tests
 │   └── plots.py          # regenerates every figure used in the notes
@@ -34,7 +35,8 @@ tail-risk-mc/
 pip install -r requirements.txt
 cd src
 python3 generate_data.py   # the "reality"
-python3 calibrate.py       # fit the three models
+python3 calibrate.py       # fit the three unconditional models
+python3 conditional.py     # fit GARCH-filtered EVT (daily VaR)
 python3 simulate.py        # Monte Carlo VaR / ES
 python3 backtest.py        # calibration vs reality (Kupiec + Christoffersen)
 python3 plots.py           # figures
@@ -75,9 +77,13 @@ questions, two tests (reject at p < 0.05):
 | 95% | Normal    | 1.71% | 100 (150) | **<0.001** | 11.0% vs 3.1% | **<0.001** |
 | 95% | Student-t | 1.41% | 148 (150) | 0.867 | 14.2% vs 4.5% | **<0.001** |
 | 95% | EVT / GPD | 1.39% | 150 (150) | 1.000 | 14.0% vs 4.5% | **<0.001** |
+| 95% | GARCH-EVT | 1.39%* | 151 (150) | 0.933 | 6.0% vs 5.0% | 0.603 |
 | 99% | Normal    | 2.45% | 42 (30)   | **0.038** | 7.1% vs 1.3% | **0.022** |
 | 99% | Student-t | 3.23% | 23 (30)   | 0.180 | 0.0% vs 0.8% | 0.551 |
 | 99% | EVT / GPD | 2.83% | 29 (30)   | 0.854 | 3.4% vs 0.9% | 0.286 |
+| 99% | GARCH-EVT | 2.47%* | 28 (30)   | 0.711 | 0.0% vs 0.9% | 0.468 |
+
+\* Average of a VaR that changes daily (0.69%–7.9% at 95%, 1.2%–13.9% at 99%).
 
 **What Kupiec says.** The Normal model fails in both directions. Matching the
 variance of fat-tailed data forces it to overstate the moderate tail (too few
@@ -97,9 +103,33 @@ GARCH-filtered EVT), can fix that.
 *The right count arriving at the wrong times: 148 breaches against 150 expected,
 bunched into three volatility spells with long quiet stretches between them.*
 
+**The fix: GARCH-filtered EVT** ([McNeil & Frey, 2000](https://doi.org/10.1016/S0927-5398(00)00012-8)).
+Split the problem in two. GARCH(1,1) forecasts *how volatile* tomorrow will be,
+using only information up to today. EVT models the *shape* of the tail of the
+standardised shocks (returns divided by that forecast), which are close to
+i.i.d. once the clustering is divided out. Daily VaR is the volatility forecast
+times a fixed tail quantile. It is the only model that passes both tests at both
+levels. At 95%, the chance of a breach on the day after a breach drops from 14% to
+6%, against a 5% base rate. It also holds *less* capital on average at 99%
+(2.47% vs Student-t's 3.23%) and still gets the count right: less in calm periods,
+more in storms.
+
+Checks that the pieces behave:
+- GARCH QMLE recovers the true process: α = 0.097, β = 0.888, against a true 0.08
+  and 0.90. When the model family is right, calibration finds the truth.
+  Compare the unconditional Student-t's ν = 2.2 against a true 4.
+- Dividing out volatility removes most of the kurtosis: excess kurtosis goes from
+  23.7 on raw returns to 4.5 on the residuals.
+- The residual tail index is ξ = 0.12, where a t(4) tail should give 0.25. This is
+  the known bias of fitting a GPD at a moderate threshold, not a bug. The same fit
+  on 2 million clean t(4) draws gives ξ ≈ 0.17 at the 90th-percentile threshold
+  and only approaches 0.25 far out (0.30 at the 99.9th). With 300
+  exceedances, 0.12 is within about one standard error of that.
+
 **Caveats.**
 - **The backtest is in-sample.** Every model is scored on the 3,000 days it was
-  fitted to, which flatters them. The GPD's 150/150 at 95% is close to automatic,
+  fitted to, which flatters them. For GARCH-EVT, each day's volatility forecast
+  uses only past returns, but the parameters were fitted on the full sample. The GPD's 150/150 at 95% is close to automatic,
   because its threshold sits at this sample's 90th percentile.
 - **The 99% passes are weak evidence.** With 23 to 29 breaches, only 0 to 1 of them
   fall on back-to-back days, so the independence test has little power, and the
