@@ -60,6 +60,34 @@ separate question, answered only by backtesting. Here the Normal model fits the
 body of the data yet is statistically **rejected** in the tail, while the
 Student-t and EVT models pass. The map is not the territory.
 
+## Result: Kupiec backtest
+
+3,000 realised days, each model's VaR checked against the same series. "Reject" means
+the breach count is statistically inconsistent with the promised level (p < 0.05).
+
+| Level | Model | VaR | Breaches (expected) | Breach rate | Kupiec p | Verdict |
+|---|---|---:|---:|---:|---:|---|
+| 95% | Normal    | 1.71% | 100 (150) | 3.33% | <0.001 | **Reject** (too cautious) |
+| 95% | Student-t | 1.41% | 148 (150) | 4.93% | 0.867 | Pass |
+| 95% | EVT / GPD | 1.39% | 150 (150) | 5.00% | 1.000 | Pass |
+| 99% | Normal    | 2.45% | 42 (30)   | 1.40% | 0.038 | **Reject** (understates risk) |
+| 99% | Student-t | 3.23% | 23 (30)   | 0.77% | 0.180 | Pass |
+| 99% | EVT / GPD | 2.83% | 29 (30)   | 0.97% | 0.854 | Pass |
+
+The Normal model fails in both directions. Matching the variance of fat-tailed data
+forces it to overstate the moderate tail and understate the extreme one. It gets
+the *shape* wrong, not just the scale.
+
+**Caveats.** This is an in-sample backtest: every model was fitted to the same 3,000
+days it is scored on. That flatters the fitted models, and the GPD's perfect 150/150 at
+95% happens almost by construction, because its threshold sits at the 90th
+percentile of this sample. Kupiec also counts only *how many* breaches occur, not
+*when*. The data comes from a GARCH process, and none of the three unconditional
+models tracks volatility clustering, so an independence test (Christoffersen)
+is the next check.
+
+Reproduce with `python3 backtest.py`. Full numbers are in `data/results.json`.
+
 ## Experiment
 
 Edit the "reality" in `src/config.py` (`TRUE_NU`, `TRUE_BETA`, the confidence
