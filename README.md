@@ -123,7 +123,8 @@ Checks that the pieces behave:
 - The residual tail index is ξ = 0.12, where a t(4) tail should give 0.25. This is
   the known bias of fitting a GPD at a moderate threshold, not a bug. The same fit
   on 2 million clean t(4) draws gives ξ ≈ 0.17 at the 90th-percentile threshold
-  and only approaches 0.25 far out (0.30 at the 99.9th). With 300
+  and climbs toward 0.25 only far out (0.20, 0.24, 0.24 at the 95th, 99th and
+  99.9th; `python3 check_xi_bias.py`). With 300
   exceedances, 0.12 is within about one standard error of that.
 
 **Caveats.**
