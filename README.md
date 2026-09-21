@@ -23,7 +23,7 @@ tail-risk-mc/
 │   ├── backtest.py       # Kupiec (count) + Christoffersen (independence) tests
 │   └── plots.py          # regenerates every figure used in the notes
 ├── data/                 # generated dataset + results.json (calibration output)
-├── figures/              # PDF figures embedded in the LaTeX
+├── figures/              # PDF figures for the LaTeX + fig_clustering.png for this README
 └── notes/
     └── tail_risk_notes.tex  # the notes  ->  tail_risk_notes.pdf
 ```
@@ -91,6 +91,11 @@ clusters, and a static VaR is breached in bursts during high-volatility spells.
 Getting the tail *shape* right (t, EVT) fixes the count, but not the timing. Only a
 conditional model, with VaR that moves with current volatility (for example
 GARCH-filtered EVT), can fix that.
+
+![Student-t 95% VaR breaches cluster in 2016, 2018-19 and 2022](figures/fig_clustering.png)
+
+*The right count arriving at the wrong times: 148 breaches against 150 expected,
+bunched into three volatility spells with long quiet stretches between them.*
 
 **Caveats.**
 - **The backtest is in-sample.** Every model is scored on the 3,000 days it was

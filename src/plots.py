@@ -6,6 +6,7 @@ Each figure makes one idea visible:
   fig_qq            -- a Normal QQ-plot bends at the tails => non-Gaussian.
   fig_mc_converge   -- Monte Carlo VaR converging as N grows (+/- std-error band).
   fig_breaches      -- where each model's 99% VaR was breached by reality.
+  fig_clustering    -- (README, PNG) Student-t 95% breaches: right count, wrong timing.
 """
 import json
 
@@ -135,6 +136,31 @@ def fig_breaches(df, results):
     plt.close(fig)
 
 
+def fig_clustering(df, results):
+    """README figure: the Student-t 95% VaR passes Kupiec, yet its breaches
+    arrive in bursts -- the Christoffersen failure, made visible."""
+    losses = -df["log_return"].to_numpy()
+    bt = results["backtest"]["0.95"]["student_t"]
+    var_t = bt["VaR"]
+    dates = pd.to_datetime(df["date"])
+    br = losses > var_t
+
+    fig, ax = plt.subplots(figsize=(8, 3.4))
+    ax.plot(dates, losses, lw=0.4, color="#888", label="realised loss")
+    ax.axhline(var_t, color="#1f3b73", lw=1.2, label=f"Student-t 95% VaR = {var_t:.4f}")
+    ax.scatter(dates[br], losses[br], s=9, color="#b3331a", zorder=3,
+               label=f"breaches: {br.sum()} (expected 150)")
+    p_ind = "<0.001" if bt["p_ind"] < 0.001 else f"={bt['p_ind']:.3f}"
+    ax.set_title(f"Student-t 95% VaR: passes Kupiec (p={bt['p_value']:.2f}), "
+                 f"fails Christoffersen (p{p_ind})\n"
+                 f"P(breach | breach yesterday) = {bt['pi11']:.1%}  vs  "
+                 f"P(breach | none yesterday) = {bt['pi01']:.1%}", fontsize=9)
+    ax.set_ylabel("daily loss"); ax.legend(fontsize=7, loc="lower left")
+    fig.tight_layout()
+    fig.savefig(C.FIGURES / "fig_clustering.png", dpi=150)
+    plt.close(fig)
+
+
 def main():
     df, results = _load()
     fig_returns(df)
@@ -142,6 +168,7 @@ def main():
     fig_qq(df)
     fig_mc_converge(results)
     fig_breaches(df, results)
+    fig_clustering(df, results)
     print(f"Wrote 5 figures -> {C.FIGURES}")
 
 
