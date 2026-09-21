@@ -6,6 +6,7 @@ Each figure makes one idea visible:
   fig_qq            -- a Normal QQ-plot bends at the tails => non-Gaussian.
   fig_mc_converge   -- Monte Carlo VaR converging as N grows (+/- std-error band).
   fig_breaches      -- where each model's 99% VaR was breached by reality.
+  fig_conditional   -- GARCH-EVT 95% VaR moving with volatility vs static Student-t.
   fig_clustering    -- (README, PNG) Student-t 95% breaches: right count, wrong timing.
 """
 import json
@@ -161,6 +162,30 @@ def fig_clustering(df, results):
     plt.close(fig)
 
 
+def fig_conditional(df, results):
+    """Conditional vs static 95% VaR: the moving line tracks the storms."""
+    losses = -df["log_return"].to_numpy()
+    cond = pd.read_csv(C.DATA / "conditional_var.csv")
+    dates = pd.to_datetime(df["date"])
+    v_c = cond["VaR_0.95"].to_numpy()
+    v_t = results["backtest"]["0.95"]["student_t"]["VaR"]
+    br = losses > v_c
+    bt = results["backtest"]["0.95"]["garch_evt"]
+
+    fig, ax = plt.subplots(figsize=(7.4, 3.2))
+    ax.plot(dates, losses, lw=0.4, color="#888", label="realised loss")
+    ax.axhline(v_t, color="#1f3b73", lw=1.0, ls="--", label=f"static Student-t VaR = {v_t:.4f}")
+    ax.plot(dates, v_c, lw=0.9, color="#2e7d32", label="GARCH-EVT VaR (daily)")
+    ax.scatter(dates[br], losses[br], s=6, color="#b3331a", zorder=3,
+               label=f"GARCH-EVT breaches: {br.sum()}")
+    ax.set_title(f"95% VaR that moves with volatility: breaches no longer cluster "
+                 f"(P(b|b) = {bt['pi11']:.1%} vs {bt['pi01']:.1%})", fontsize=9)
+    ax.set_ylabel("loss"); ax.legend(fontsize=7, loc="lower left", ncol=2)
+    fig.tight_layout()
+    fig.savefig(C.FIGURES / "fig_conditional.pdf")
+    plt.close(fig)
+
+
 def main():
     df, results = _load()
     fig_returns(df)
@@ -169,6 +194,7 @@ def main():
     fig_mc_converge(results)
     fig_breaches(df, results)
     fig_clustering(df, results)
+    fig_conditional(df, results)
     print(f"Wrote 5 figures -> {C.FIGURES}")
 
 

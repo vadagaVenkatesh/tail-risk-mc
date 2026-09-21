@@ -368,11 +368,88 @@ comfort: with only 23--29 breaches, just 0--1 of them fall on consecutive days,
 so the test has almost no power and the $\chi^2$ approximation is rough. A pass
 there means ``not enough evidence of clustering,'' not ``independent.''
 
+% ===================================================================
+\section{The fix: a VaR that moves with volatility}
+Every model so far answers ``how fat is the tail?'' and ignores ``how stormy
+is today?''. GARCH-filtered EVT (McNeil and Frey, 2000) answers the two
+questions separately.
+\begin{enumerate}[nosep,leftmargin=1.6em]
+  \item \textbf{GARCH(1,1) for the storm.} Fit
+        $\sigma_t^2=\omega+\alpha\,\varepsilon_{t-1}^2+\beta\,\sigma_{t-1}^2$
+        by Gaussian quasi-maximum likelihood. The Normal likelihood still gives
+        consistent GARCH parameters when the true shocks are fat-tailed. It
+        is only wrong about the tail, which step 2 handles instead.
+        $\sigma_t$ uses information up to day $t-1$ only.
+  \item \textbf{EVT for the tail.} Standardise,
+        $z_t=(r_t-\mu)/\sigma_t$. With the clustering divided out, the $z_t$
+        are close to i.i.d., so fitting a POT--GPD to their loss tail is now
+        well posed. It gives a fixed tail quantile $q_z(p)$.
+  \item \textbf{Recombine.} $\mathrm{VaR}_t(p)=-\mu+\sigma_t\,q_z(p)$: a
+        fixed tail shape scaled by a moving volatility.
+\end{enumerate}
+
+\begin{table}[h]
+  \centering
+  \caption{GARCH-EVT against the best unconditional model. It is the only
+  model that passes both tests at both levels.}
+  \label{tab:garchevt}
+  \begin{tabular}{llcccccc}
+    \toprule
+    $\alpha$ & Model & mean VaR & Breaches & Kupiec $p$ & $\hat\pi_{11}$ & $\hat\pi_{01}$ & Christoffersen $p$\\
+    \midrule
+    \multirow{2}{*}{95\%}
+      & Student-$t$ & 0.0141 & 148 & 0.867 & 14.2\% & 4.5\% & \textcolor{brick}{0.000}\\
+      & GARCH-EVT   & 0.0139 & 151 & 0.933 & 6.0\%  & 5.0\% & 0.603\\
+    \midrule
+    \multirow{2}{*}{99\%}
+      & Student-$t$ & 0.0323 & 23  & 0.180 & 0.0\%  & 0.8\% & 0.551\\
+      & GARCH-EVT   & 0.0247 & 28  & 0.711 & 0.0\%  & 0.9\% & 0.468\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent At 95\%, the day after a breach now carries a 6.0\% breach rate against
+a 5.0\% base, where the static models showed 14\% against 4.5\%. The
+clustering is gone (Figure~\ref{fig:conditional}). The capital story is just as
+important. At 99\%, GARCH-EVT holds \emph{less} VaR on average than the
+Student-$t$ (0.0247 against 0.0323) and still delivers the right breach
+count. It holds less in calm periods and more in storms, where the static model
+holds the same amount everywhere and so over-reserves in calm and under-reserves in crisis.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{fig_conditional.pdf}
+  \caption{GARCH-EVT 95\% VaR (green) rises into the 2016 and 2022 storms and
+  relaxes after them. Its breaches are spread across the sample instead of
+  bunched into the volatile spells.}
+  \label{fig:conditional}
+\end{figure}
+
+\paragraph{Checks that the pieces behave.}
+\begin{itemize}[nosep]
+  \item \emph{GARCH recovers the truth.} $\hat\alpha=0.097$, $\hat\beta=0.888$,
+        against a true $0.08$ and $0.90$. When the model family matches reality,
+        calibration finds reality. Contrast the unconditional $\hat\nu=2.21$
+        against a true $4$.
+  \item \emph{Filtering removes the clustering.} Excess kurtosis falls from
+        23.7 on raw returns to 4.5 on the residuals. What remains is the
+        genuine fat tail of the $t_4$ shocks.
+  \item \emph{The residual tail index is biased low, as expected.} The fit gives
+        $\hat\xi=0.12$, where a $t_4$ tail has $\xi=1/4$. This is not a bug.
+        A Student-$t$ tail is Pareto only asymptotically, so a GPD fitted
+        above a moderate threshold underestimates $\xi$. On two million clean
+        $t_4$ draws the same procedure gives $\hat\xi\approx0.17$ at the 90th
+        percentile, $0.22$ at the 99th and $0.30$ at the 99.9th. With 300
+        exceedances (standard error $\approx0.065$), 0.12 is within about one
+        standard error of 0.17.
+\end{itemize}
+
 \paragraph{A caveat on everything above.} This backtest is \emph{in-sample}:
 each model is scored on the same 3{,}000 days it was fitted to, which flatters
 all of them. The GPD's perfect 150/150 at 95\% is close to automatic, since
-its threshold is this sample's 90th percentile. A rolling out-of-sample backtest
-is the honest next step.
+its threshold is this sample's 90th percentile. For GARCH-EVT, each day's
+$\sigma_t$ uses only past returns, but the parameters were estimated on the
+full sample. A rolling out-of-sample backtest is the honest next step.
 
 % ===================================================================
 \section{What this says about calibration and reality}
@@ -394,8 +471,14 @@ is the honest next step.
         in-sample, and not the breach \emph{timing}.
   \item \textbf{Passing Kupiec is not the number being right.} Breaches
         cluster (Table~\ref{tab:christoffersen}): every model fails independence
-        at 95\%. A fatter tail cannot fix that; only a \emph{conditional} VaR
-        that moves with current volatility (e.g.\ GARCH-filtered EVT) can.
+        at 95\%. A fatter tail cannot fix that. A \emph{conditional} VaR that
+        moves with current volatility can: GARCH-EVT
+        (Table~\ref{tab:garchevt}) passes both tests at both levels.
+  \item \textbf{Get the model family right, and calibration finds the truth.}
+        The same MLE machinery that returned $\nu=2.21$ for a static $t$ recovers
+        the true GARCH parameters to within 0.02 once the model can express
+        clustering. Most of calibration's success or failure is decided by the
+        choice of model family.
 \end{enumerate}
 
 \noindent \emph{The map is not the territory.} A calibrated model is a map
@@ -411,6 +494,7 @@ From \texttt{src/} run, in order:
 \begin{verbatim}
 python3 generate_data.py   # writes data/returns.csv  (the "reality")
 python3 calibrate.py       # fits Normal / Student-t / GPD -> results.json
+python3 conditional.py     # GARCH(1,1) QMLE + EVT on residuals -> daily VaR
 python3 simulate.py        # Monte Carlo VaR & ES
 python3 backtest.py        # Kupiec + Christoffersen vs realised losses
 python3 plots.py           # regenerates every figure in this document
