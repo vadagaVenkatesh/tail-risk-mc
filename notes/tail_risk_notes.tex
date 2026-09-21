@@ -312,6 +312,68 @@ through the 99\% lines.
   \label{fig:breaches}
 \end{figure}
 
+\subsection{Counting is not enough: the independence test}
+Kupiec asks \emph{how many} breaches occurred. It is blind to \emph{when}. A
+model that breaches 150 times in 3{,}000 days passes it perfectly --- even if
+all 150 fell in three bad months. That matters: a desk that loses its VaR
+several days running is in far more trouble than one that loses it on scattered
+days, and a GARCH reality produces exactly that pattern.
+
+Christoffersen's test fits a two-state Markov chain to the 0/1 breach sequence.
+Let $n_{ij}$ count days in state $j$ following a day in state $i$ (1 = breach),
+and set
+\[
+  \hat\pi_{01}=\frac{n_{01}}{n_{00}+n_{01}},\qquad
+  \hat\pi_{11}=\frac{n_{11}}{n_{10}+n_{11}},\qquad
+  \hat\pi=\frac{n_{01}+n_{11}}{n_{00}+n_{01}+n_{10}+n_{11}}.
+\]
+$\hat\pi_{11}$ is the breach rate on the day \emph{after} a breach. Under
+independence it equals $\hat\pi_{01}$, and
+\[
+  LR_{\text{ind}} = -2\ln\!\frac{(1-\hat\pi)^{\,n_{00}+n_{10}}\,\hat\pi^{\,n_{01}+n_{11}}}
+     {(1-\hat\pi_{01})^{\,n_{00}}\,\hat\pi_{01}^{\,n_{01}}\,
+      (1-\hat\pi_{11})^{\,n_{10}}\,\hat\pi_{11}^{\,n_{11}}}
+  \;\xrightarrow{\;H_0\;}\;\chi^2_1 .
+\]
+The sum $LR_{\text{cc}}=LR_{\text{POF}}+LR_{\text{ind}}\sim\chi^2_2$ tests
+count and timing jointly (``conditional coverage'').
+
+\begin{table}[h]
+  \centering
+  \caption{Independence of breaches. At 95\% \textcolor{brick}{every} model is
+  rejected --- including the two that passed Kupiec.}
+  \label{tab:christoffersen}
+  \begin{tabular}{llcccc}
+    \toprule
+    $\alpha$ & Model & Kupiec $p$ & $\hat\pi_{11}$ & $\hat\pi_{01}$ & Christoffersen $p$\\
+    \midrule
+    \multirow{3}{*}{95\%}
+      & Normal      & 0.000 & 11.0\% & 3.1\% & \textcolor{brick}{0.000}\\
+      & Student-$t$ & 0.867 & 14.2\% & 4.5\% & \textcolor{brick}{0.000}\\
+      & GPD/EVT     & 1.000 & 14.0\% & 4.5\% & \textcolor{brick}{0.000}\\
+    \midrule
+    \multirow{3}{*}{99\%}
+      & Normal      & 0.038 & 7.1\%  & 1.3\% & \textcolor{brick}{0.022}\\
+      & Student-$t$ & 0.180 & 0.0\%  & 0.8\% & 0.551\\
+      & GPD/EVT     & 0.854 & 3.4\%  & 0.9\% & 0.286\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent At 95\%, a breach triples the chance of another the next day. Fixing
+the tail \emph{shape} (Student-$t$, EVT) fixed the \emph{count}; it did nothing
+for the \emph{timing}, because every model here is unconditional --- one VaR
+number for calm and storm alike. The 99\% passes deserve suspicion rather than
+comfort: with only 23--29 breaches, just 0--1 of them fall on consecutive days,
+so the test has almost no power and the $\chi^2$ approximation is rough. A pass
+there means ``not enough evidence of clustering,'' not ``independent.''
+
+\paragraph{A caveat on everything above.} This backtest is \emph{in-sample}:
+each model is scored on the same 3{,}000 days it was fitted to, which flatters
+all of them. The GPD's perfect 150/150 at 95\% is close to automatic, since
+its threshold is this sample's 90th percentile. A rolling out-of-sample backtest
+is the honest next step.
+
 % ===================================================================
 \section{What this says about calibration and reality}
 \begin{enumerate}[leftmargin=1.6em]
@@ -328,11 +390,12 @@ through the 99\% lines.
         (Table~\ref{tab:backtest}) is what tests the \emph{model}.
   \item \textbf{Estimate ES, and prefer EVT in the tail.} ES integrates the
         whole tail and is coherent; EVT models the tail on its own terms and
-        here tracked reality most closely (breach rates 5.00\% and 0.97\%).
-  \item \textbf{Breaches cluster.} Both the data and Figure~\ref{fig:breaches}
-        show exceedances arriving in bursts, violating the independence that
-        simple VaR assumes --- which is why conditional (e.g.\ GARCH-filtered)
-        and dynamic-EVT approaches exist.
+        here matched the breach \emph{count} most closely (5.00\% and 0.97\%) --- though
+        in-sample, and not the breach \emph{timing}.
+  \item \textbf{Passing Kupiec is not the number being right.} Breaches
+        cluster (Table~\ref{tab:christoffersen}): every model fails independence
+        at 95\%. A fatter tail cannot fix that; only a \emph{conditional} VaR
+        that moves with current volatility (e.g.\ GARCH-filtered EVT) can.
 \end{enumerate}
 
 \noindent \emph{The map is not the territory.} A calibrated model is a map
@@ -349,7 +412,7 @@ From \texttt{src/} run, in order:
 python3 generate_data.py   # writes data/returns.csv  (the "reality")
 python3 calibrate.py       # fits Normal / Student-t / GPD -> results.json
 python3 simulate.py        # Monte Carlo VaR & ES
-python3 backtest.py        # Kupiec backtest vs realised losses
+python3 backtest.py        # Kupiec + Christoffersen vs realised losses
 python3 plots.py           # regenerates every figure in this document
 \end{verbatim}
 All randomness is seeded in \texttt{config.py}, so the numbers quoted here
